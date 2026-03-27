@@ -6,7 +6,9 @@ requires-python = ">=3.11"
 dependencies = [
     "nanobot-ai>=0.1.4",
     "lms-mcp",
+    "nanobot-webchat",
 ]
 
 [tool.uv.sources]
 lms-mcp = { path = "../mcp", editable = true }
+nanobot-webchat = { git = "https://github.com/inno-se-toolkit/nanobot-websocket-channel.git" }

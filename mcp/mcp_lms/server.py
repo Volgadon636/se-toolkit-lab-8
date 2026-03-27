@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import urllib.parse
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
+import httpx
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
@@ -36,6 +38,29 @@ class _TopLearnersQuery(_LabQuery):
     limit: int = Field(
         default=5, ge=1, description="Max learners to return (default 5)."
     )
+
+
+class _LogsSearchQuery(BaseModel):
+    query: str = Field(description="LogsQL query for VictoriaLogs.")
+    limit: int = Field(default=50, ge=1, le=500)
+
+
+class _LogsErrorCountQuery(BaseModel):
+    service: str = Field(
+        default="backend", description='Value for the `service` label (e.g. "backend").'
+    )
+    minutes: int = Field(
+        default=60, ge=1, le=1440, description="Time window in minutes (hint for queries)."
+    )
+
+
+class _TracesListQuery(BaseModel):
+    service: str = Field(default="backend", description="OpenTelemetry service name.")
+    limit: int = Field(default=20, ge=1, le=100)
+
+
+class _TracesGetQuery(BaseModel):
+    trace_id: str = Field(description="Trace ID from traces_list or log lines.")
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +137,88 @@ async def _sync_pipeline(_args: _NoArgs) -> list[TextContent]:
     return _text(await _client().sync_pipeline())
 
 
+def _victorialogs_base() -> str:
+    return os.environ.get("VICTORIALOGS_BASE_URL", "").strip().rstrip("/")
+
+
+def _victoriatraces_base() -> str:
+    return os.environ.get("VICTORIATRACES_BASE_URL", "").strip().rstrip("/")
+
+
+async def _logs_search(args: _LogsSearchQuery) -> list[TextContent]:
+    base = _victorialogs_base()
+    if not base:
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {"error": "VICTORIALOGS_BASE_URL is not set"}, ensure_ascii=False
+                ),
+            )
+        ]
+    q = urllib.parse.quote(args.query)
+    url = f"{base}/select/logsql/query?query={q}&limit={args.limit}"
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        text = r.text
+        if len(text) > 12000:
+            text = text[:12000] + "\n... (truncated)"
+        return [TextContent(type="text", text=text)]
+
+
+async def _logs_error_count(args: _LogsErrorCountQuery) -> list[TextContent]:
+    """Fetch error log lines for a service (uses LogsQL; minutes is a hint for the agent)."""
+    _ = args.minutes
+    query = f'_stream:{{service="{args.service}"}} AND level:error'
+    return await _logs_search(_LogsSearchQuery(query=query, limit=500))
+
+
+async def _traces_list(args: _TracesListQuery) -> list[TextContent]:
+    base = _victoriatraces_base()
+    if not base:
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {"error": "VICTORIATRACES_BASE_URL is not set"}, ensure_ascii=False
+                ),
+            )
+        ]
+    url = f"{base}/jaeger/api/traces"
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        r = await client.get(
+            url, params={"service": args.service, "limit": args.limit}
+        )
+        r.raise_for_status()
+        text = r.text
+        if len(text) > 15000:
+            text = text[:15000] + "\n... (truncated)"
+        return [TextContent(type="text", text=text)]
+
+
+async def _traces_get(args: _TracesGetQuery) -> list[TextContent]:
+    base = _victoriatraces_base()
+    if not base:
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {"error": "VICTORIATRACES_BASE_URL is not set"}, ensure_ascii=False
+                ),
+            )
+        ]
+    tid = urllib.parse.quote(args.trace_id.strip(), safe="")
+    url = f"{base}/jaeger/api/traces/{tid}"
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        text = r.text
+        if len(text) > 20000:
+            text = text[:20000] + "\n... (truncated)"
+        return [TextContent(type="text", text=text)]
+
+
 # ---------------------------------------------------------------------------
 # Registry: tool name -> (input model, handler, Tool definition)
 # ---------------------------------------------------------------------------
@@ -183,6 +290,30 @@ _register(
     "Trigger the LMS sync pipeline. May take a moment.",
     _NoArgs,
     _sync_pipeline,
+)
+_register(
+    "logs_search",
+    "Search VictoriaLogs using LogsQL (e.g. _stream:{service=\"backend\"} AND level:error).",
+    _LogsSearchQuery,
+    _logs_search,
+)
+_register(
+    "logs_error_count",
+    "Fetch recent error log lines for a service (uses LogsQL). Use for 'errors in the last hour' style questions.",
+    _LogsErrorCountQuery,
+    _logs_error_count,
+)
+_register(
+    "traces_list",
+    "List recent traces for an OpenTelemetry service (Jaeger API on VictoriaTraces).",
+    _TracesListQuery,
+    _traces_list,
+)
+_register(
+    "traces_get",
+    "Fetch a trace by ID (Jaeger API). Use when you see a trace_id in logs.",
+    _TracesGetQuery,
+    _traces_get,
 )
 
 
