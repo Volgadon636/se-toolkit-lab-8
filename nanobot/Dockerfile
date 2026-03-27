@@ -8,6 +8,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_NO_DEV=1 UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /app
 COPY --from=workspace mcp /app/mcp
+COPY --from=workspace nanobot-websocket-channel /app/nanobot-websocket-channel
 COPY . /app/nanobot
 
 WORKDIR /app/nanobot

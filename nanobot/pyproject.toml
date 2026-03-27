@@ -11,4 +11,6 @@ dependencies = [
 
 [tool.uv.sources]
 lms-mcp = { path = "../mcp", editable = true }
-nanobot-webchat = { git = "https://github.com/inno-se-toolkit/nanobot-websocket-channel.git" }
+# Path (not git): Docker builder image has no git — uv cannot clone during `uv sync`.
+# Requires `nanobot-websocket-channel/` at repo root (`git submodule update --init`).
+nanobot-webchat = { path = "../nanobot-websocket-channel", editable = true }
