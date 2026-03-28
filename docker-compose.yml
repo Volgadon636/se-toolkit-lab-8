@@ -146,16 +146,25 @@ services:
 
   caddy:
     image: ${REGISTRY_PREFIX_DOCKER_HUB:-}caddy:2.11-alpine
+    restart: unless-stopped
     networks:
       - lms-network
+    # One-shot clients must finish copying into volumes before Caddy serves /srv/react and /srv/flutter.
     depends_on:
-      - backend
-      - client-web-react
-      - client-web-flutter
-      - nanobot
-      - qwen-code-api
-      - victorialogs
-      - victoriatraces
+      backend:
+        condition: service_started
+      client-web-react:
+        condition: service_completed_successfully
+      client-web-flutter:
+        condition: service_completed_successfully
+      nanobot:
+        condition: service_started
+      qwen-code-api:
+        condition: service_started
+      victorialogs:
+        condition: service_started
+      victoriatraces:
+        condition: service_started
     environment:
       - CADDY_CONTAINER_PORT=${CADDY_CONTAINER_PORT:?'CADDY_CONTAINER_PORT is required'}
       - BACKEND_CONTAINER_PORT=${BACKEND_CONTAINER_PORT:?'BACKEND_CONTAINER_PORT is required'}
