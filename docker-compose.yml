@@ -104,6 +104,8 @@ services:
       - lms-network
     environment:
       - LLM_API_KEY=${LLM_API_KEY:?'LLM_API_KEY is required'}
+      # Optional override; if empty, entrypoint uses LLM_API_BASE_URL below.
+      - LLM_API_BASE=${LLM_API_BASE:-}
       - LLM_API_BASE_URL=http://qwen-code-api:${QWEN_CODE_API_CONTAINER_PORT:?'QWEN_CODE_API_CONTAINER_PORT is required'}/v1
       - LLM_API_MODEL=${LLM_API_MODEL:?'LLM_API_MODEL is required'}
       - NANOBOT_LMS_BACKEND_URL=http://backend:${BACKEND_CONTAINER_PORT:?'BACKEND_CONTAINER_PORT is required'}
@@ -115,6 +117,18 @@ services:
       - NANOBOT_WEBCHAT_CONTAINER_ADDRESS=${NANOBOT_WEBCHAT_CONTAINER_ADDRESS:?'NANOBOT_WEBCHAT_CONTAINER_ADDRESS is required'}
       - NANOBOT_WEBCHAT_CONTAINER_PORT=${NANOBOT_WEBCHAT_CONTAINER_PORT:?'NANOBOT_WEBCHAT_CONTAINER_PORT is required'}
       - NANOBOT_ACCESS_KEY=${NANOBOT_ACCESS_KEY:?'NANOBOT_ACCESS_KEY is required'}
+    # WebChat port accepts TCP (Caddy proxies /ws/chat here). Gateway control port may not expose plain TCP the same way.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import os,socket;s=socket.socket();
+          p=int(os.environ.get('NANOBOT_WEBCHAT_CONTAINER_PORT','8765'));
+          s.settimeout(3);s.connect(('127.0.0.1',p));s.close()"
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 45s
     depends_on:
       - backend
       - qwen-code-api
@@ -126,7 +140,6 @@ services:
       context: ./nanobot-websocket-channel/client-web-flutter
       args:
         REGISTRY_PREFIX_DOCKER_HUB: ${REGISTRY_PREFIX_DOCKER_HUB:-}
-        REGISTRY_PREFIX_GHCR: ${REGISTRY_PREFIX_GHCR:-}
     volumes:
       - client-web-flutter:/output
 

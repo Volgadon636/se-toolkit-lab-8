@@ -1,10 +1,13 @@
-# Nanobot gateway + LMS MCP + webchat channel (Task 2)
-# Build context: ./nanobot  |  additional_contexts: workspace = repo root
-# Python 3.12: nanobot-ai + plugins are tested on 3.11–3.12; 3.14 can break at runtime.
+# Nanobot gateway — Task 2
+# Build: docker compose build nanobot (context ./nanobot, additional_contexts workspace: .)
 
-ARG REGISTRY_PREFIX_DOCKER_HUB
-FROM ${REGISTRY_PREFIX_DOCKER_HUB}astral/uv:python3.12-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_NO_DEV=1 UV_PYTHON_DOWNLOADS=0
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=workspace mcp /app/mcp
@@ -16,8 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev \
     && test -x /app/nanobot/.venv/bin/nanobot
 
-ARG REGISTRY_PREFIX_DOCKER_HUB
-FROM ${REGISTRY_PREFIX_DOCKER_HUB}python:3.12-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 LANG=C.UTF-8
 
@@ -28,12 +30,10 @@ COPY --from=builder --chown=nonroot:nonroot /app /app
 
 ENV PATH="/app/nanobot/.venv/bin:$PATH"
 ENV NANOBOT_VENV_PYTHON=/app/nanobot/.venv/bin/python
-ENV NANOBOT_CLI=/app/nanobot/.venv/bin/nanobot
 WORKDIR /app/nanobot
 
-# Fail build if venv paths break across stages (common Docker footgun).
 RUN /app/nanobot/.venv/bin/python -c "import nanobot; from nanobot.config.schema import Config; print('nanobot import ok')"
 
 USER nonroot
 
-CMD ["/app/nanobot/.venv/bin/python", "entrypoint.py"]
+CMD ["python", "/app/nanobot/entrypoint.py"]

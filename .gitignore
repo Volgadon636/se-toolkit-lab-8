@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 
 *.secret
+.env.docker.secret.local-test
 
 .ruff_cache
 .pytest_cache
