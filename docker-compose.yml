@@ -137,7 +137,8 @@ services:
 
   client-web-flutter:
     build:
-      context: ./nanobot-websocket-channel/client-web-flutter
+      context: .
+      dockerfile: docker/client-web-flutter.Dockerfile
       args:
         REGISTRY_PREFIX_DOCKER_HUB: ${REGISTRY_PREFIX_DOCKER_HUB:-}
     volumes:
