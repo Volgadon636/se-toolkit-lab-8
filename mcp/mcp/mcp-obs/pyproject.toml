@@ -1,0 +1,18 @@
+[project]
+name = "mcp-obs"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Arthur20042007", email = "arturs4690@icloud.com" }
+]
+requires-python = "==3.14.*"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp>=1.26.0",
+    "pydantic>=2.12.5",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.12,<0.11.0"]
+build-backend = "uv_build"
