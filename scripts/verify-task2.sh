@@ -28,6 +28,7 @@ fi
 
 if ! out="$(curl -sf "http://127.0.0.1:${GATEWAY_PORT}/flutter/main.dart.js" 2>/dev/null | head -c 20)" || [[ ${#out} -lt 10 ]]; then
   echo "FAIL: Flutter bundle missing at http://127.0.0.1:${GATEWAY_PORT}/flutter/main.dart.js"
+  echo "Hint: run ./scripts/ensure-static-clients.sh then docker compose restart caddy"
   exit 1
 fi
 
