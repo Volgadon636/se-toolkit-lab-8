@@ -13,7 +13,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-GATEWAY_PORT="$(grep -E '^GATEWAY_HOST_PORT=' "$ENV_FILE" | cut -d= -f2- | tr -d '\r' | head -1)"
+# Match even if the line has spaces around "=" (strict ^GATEWAY_HOST_PORT= misses that)
+GATEWAY_PORT="$(grep -E '^[[:space:]]*GATEWAY_HOST_PORT[[:space:]]*=' "$ENV_FILE" | head -1 | sed -E 's/^[[:space:]]*GATEWAY_HOST_PORT[[:space:]]*=[[:space:]]*//' | tr -d '\r')"
 GATEWAY_PORT="${GATEWAY_PORT:-42002}"
 ACCESS_KEY="$(grep -E '^NANOBOT_ACCESS_KEY=' "$ENV_FILE" | cut -d= -f2- | tr -d '\r' | sed 's/^"\(.*\)"$/\1/')"
 if [[ -z "${ACCESS_KEY// }" ]]; then
@@ -26,7 +27,10 @@ if ! docker compose --env-file "$ENV_FILE" ps -a 2>/dev/null | grep -qE 'nanobot
   exit 1
 fi
 
-if ! out="$(curl -sf "http://127.0.0.1:${GATEWAY_PORT}/flutter/main.dart.js" 2>/dev/null | head -c 20)" || [[ ${#out} -lt 10 ]]; then
+# Do not use curl|head under pipefail: head closes the pipe after 20 bytes, curl gets SIGPIPE and
+# exits non-zero — the pipeline "fails" even though bytes were read. Use a byte range instead.
+out="$(curl -sf -r 0-19 "http://127.0.0.1:${GATEWAY_PORT}/flutter/main.dart.js" 2>/dev/null)" || true
+if [[ ${#out} -lt 10 ]]; then
   echo "FAIL: Flutter bundle missing at http://127.0.0.1:${GATEWAY_PORT}/flutter/main.dart.js"
   echo "Hint: run ./scripts/ensure-static-clients.sh then docker compose restart caddy"
   exit 1
